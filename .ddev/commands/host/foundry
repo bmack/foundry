@@ -181,6 +181,14 @@ setup() {
     ddev exec php foundry/generate.php --finalize --base-url="${PRIMARY_URL}/"
     ddev typo3 extension:setup
 
+    # Create the default fileadmin storage now, in one process. Left alone, TYPO3 creates
+    # it on the first backend requests, and parallel requests can each create one.
+    # Any command that reads the storages does this; this one has no other effect here.
+    ddev typo3 cleanup:localprocessedfiles --no-interaction >/dev/null
+    if [ "$(ddev mysql -N -e 'SELECT COUNT(*) FROM sys_file_storage' | tr -d '\r\n')" != "1" ]; then
+        echo "Warning: expected exactly one file storage; check the file list module." >&2
+    fi
+
     # Sample pages for the bases that render the site themselves (empty for the others)
     ddev exec php foundry/generate.php --seed-sql > foundry/seed.sql
     if [ -s foundry/seed.sql ]; then
