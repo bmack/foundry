@@ -1,0 +1,5 @@
+Soul Design System (https://github.com/TYPO3/soul-design-system)
+Tag: v0.7.1
+Commit: f6db0f56bd6fdf5c64a685aeb4deadd6f0168235
+Files: packages/frontend/dist/soul.css and dist/fonts/ (MIT, see LICENSE)
+The brand assets (signet, wordmark, artwork) are deliberately not included.

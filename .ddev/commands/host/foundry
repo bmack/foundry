@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+
+## Description: Set up a new TYPO3 project (vendor, project, TYPO3 version and base)
+## Usage: foundry setup [--vendor=acme] [--project=my-site] [--version=14|15] [--base=custom|fsc|camino|bootstrap|empty|none] [--yes] [--keep-git]
+## Example: ddev foundry setup
+## Example: ddev foundry setup --yes
+## Example: ddev foundry setup --vendor=acme --project=my-site --version=14 --base=custom
+
+# Every question can be answered up front, in this order of precedence:
+#   1. flag (--vendor=...), 2. environment (FOUNDRY_VENDOR=...), 3. default.
+# Defaults: project = folder name (the DDEV host name), vendor = project,
+# version = 14, base = custom. Without --yes, the defaults are offered as
+# the answer to the prompt.
+
+set -euo pipefail
+
+BOLD='\033[1m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
+info()    { echo -e "${BOLD}==>${NC} $*"; }
+success() { echo -e "${GREEN}✓${NC} $*"; }
+error()   { echo -e "${RED}✗ $*${NC}" >&2; }
+
+NAME_PATTERN='^[a-z][a-z0-9]*(-[a-z0-9]+)*$'
+ASSUME_YES=0
+
+# Turn any string into a valid lowercase name (letters, digits, dashes; starts with a letter).
+slugify() {
+    echo "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^[^a-z]+//; s/-+$//'
+}
+
+# True when nobody can answer a prompt.
+unattended() {
+    [ "${ASSUME_YES}" -eq 1 ] || [ ! -t 0 ]
+}
+
+# Fill VAR from its FOUNDRY_ environment variable if it is still empty.
+from_env() {
+    local var=$1 env_name="FOUNDRY_$1"
+    if [ -z "${!var}" ] && [ -n "${!env_name:-}" ]; then
+        printf -v "$var" '%s' "${!env_name}"
+    fi
+}
+
+# Ask for a value unless it is already set. Usage: ask VAR "Question" default
+ask() {
+    local var=$1 question=$2 default=${3:-}
+    from_env "$var"
+    if [ -n "${!var}" ]; then
+        return
+    fi
+    if unattended; then
+        [ -n "${default}" ] || { error "No default for ${var}; pass it as a flag or set FOUNDRY_${var}"; exit 1; }
+        printf -v "$var" '%s' "${default}"
+        return
+    fi
+    local answer
+    read -r -p "${question}${default:+ [${default}]}: " answer
+    printf -v "$var" '%s' "${answer:-$default}"
+}
+
+# Pick one entry. Usage: choose VAR "Question" default-index value:Label ...
+choose() {
+    local var=$1 question=$2 default=$3
+    shift 3
+    from_env "$var"
+    if [ -n "${!var}" ]; then
+        return
+    fi
+    local entry picked_default=""
+    local i=1
+    for entry in "$@"; do
+        [ "${i}" -eq "${default}" ] && picked_default="${entry%%:*}"
+        i=$((i + 1))
+    done
+    if unattended; then
+        printf -v "$var" '%s' "${picked_default}"
+        return
+    fi
+    echo "${question}"
+    i=1
+    for entry in "$@"; do
+        echo "  ${i}) ${entry#*:}"
+        i=$((i + 1))
+    done
+    local answer
+    read -r -p "Choice [${default}]: " answer
+    answer=${answer:-$default}
+    if [[ "${answer}" =~ ^[0-9]+$ ]] && [ "${answer}" -ge 1 ] && [ "${answer}" -le "$#" ]; then
+        local picked=${!answer}
+        printf -v "$var" '%s' "${picked%%:*}"
+    else
+        printf -v "$var" '%s' "${answer}"
+    fi
+}
+
+setup() {
+    cd "${DDEV_APPROOT}"
+
+    local VENDOR="" PROJECT="" VERSION="" BASE="" KEEP_GIT=0 arg
+    for arg in "$@"; do
+        case "${arg}" in
+            --vendor=*)  VENDOR="${arg#*=}" ;;
+            --project=*) PROJECT="${arg#*=}" ;;
+            --version=*) VERSION="${arg#*=}" ;;
+            --base=*)    BASE="${arg#*=}" ;;
+            --yes|-y)    ASSUME_YES=1 ;;
+            --keep-git)  KEEP_GIT=1 ;;
+            *) error "Unknown option: ${arg}"; exit 1 ;;
+        esac
+    done
+
+    if [ ! -d foundry ]; then
+        error "This project has already been set up (the foundry/ directory is gone)."
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${BOLD}TYPO3 foundry${NC}"
+    echo "═════════════"
+    echo ""
+
+    # The DDEV host name is <project>.ddev.site, and DDEV derives the project
+    # from the folder name, so the folder name is the natural default.
+    ask PROJECT "Project name (also the host name: https://<project>.ddev.site)" "$(slugify "$(basename "${DDEV_APPROOT}")")"
+    ask VENDOR "Vendor name (lowercase, e.g. acme)" "${PROJECT}"
+    choose VERSION "TYPO3 version" 1 "14:TYPO3 14 (^14.3, stable)" "15:TYPO3 15 (dev-main)"
+    choose BASE "Base for the site package" 1 \
+        "custom:Custom site package with a basic HTML page layout" \
+        "fsc:Fluid Styled Content" \
+        "camino:Camino theme" \
+        "bootstrap:Bootstrap Package" \
+        "empty:Empty site package" \
+        "none:No site package"
+
+    [[ "${VENDOR}" =~ ${NAME_PATTERN} ]]  || { error "Vendor must be lowercase letters, digits and dashes, starting with a letter"; exit 1; }
+    [[ "${PROJECT}" =~ ${NAME_PATTERN} ]] || { error "Project must be lowercase letters, digits and dashes, starting with a letter"; exit 1; }
+    local PHP_VERSION
+    case "${VERSION}" in
+        14) PHP_VERSION="8.4" ;;
+        15) PHP_VERSION="8.5" ;;
+        *)  error "Version must be 14 or 15"; exit 1 ;;
+    esac
+    if [ ! -d "foundry/bases/${BASE}" ]; then
+        error "Unknown base: ${BASE}"
+        exit 1
+    fi
+    if [ "${VERSION}" = "15" ] && [ "${BASE}" = "bootstrap" ]; then
+        error "The Bootstrap Package does not support TYPO3 15 yet"
+        exit 1
+    fi
+
+    info "Configuring DDEV (project ${PROJECT}, PHP ${PHP_VERSION})"
+    ddev config --project-name="${PROJECT}" --php-version="${PHP_VERSION}" >/dev/null
+    ddev start
+    local PRIMARY_URL
+    PRIMARY_URL="$(ddev exec printenv DDEV_PRIMARY_URL | tr -d "\r\n")"
+
+    info "Generating the project"
+    ddev exec php foundry/generate.php \
+        --vendor="${VENDOR}" --project="${PROJECT}" --version="${VERSION}" --base="${BASE}"
+
+    info "Installing Composer dependencies"
+    ddev composer install
+
+    info "Setting up TYPO3"
+    ddev exec vendor/bin/typo3 setup --no-interaction --force --server-type=other \
+        --project-name="$(ddev exec php foundry/generate.php --print-title)" \
+        --create-site="${PRIMARY_URL}/"
+
+    ddev exec php foundry/generate.php --finalize --base-url="${PRIMARY_URL}/"
+    ddev typo3 extension:setup
+
+    # Sample pages for the bases that render the site themselves (empty for the others)
+    ddev exec php foundry/generate.php --seed-sql > foundry/seed.sql
+    if [ -s foundry/seed.sql ]; then
+        ddev mysql < foundry/seed.sql
+    fi
+    ddev typo3 cache:flush
+
+    info "Cleaning up"
+    rm -rf foundry .ddev/commands/host/foundry
+    if [ "${KEEP_GIT}" -eq 0 ]; then
+        rm -rf .git
+        git init -q -b main
+    fi
+
+    echo ""
+    success "Your project is ready"
+    echo "  Frontend: ${PRIMARY_URL}/"
+    echo "  Backend:  ${PRIMARY_URL}/typo3/  (admin / Password.1)"
+    echo ""
+}
+
+case "${1:-}" in
+    setup) shift; setup "$@" ;;
+    *)     echo "Usage: ddev foundry setup [--vendor=..] [--project=..] [--version=14|15] [--base=..] [--yes] [--keep-git]"; exit 1 ;;
+esac
+exit $?

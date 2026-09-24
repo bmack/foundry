@@ -1,0 +1,12 @@
+/vendor/
+/public/
+/var/
+/config/sites/
+/config/system/settings.php
+/foundry/.state.json
+/composer.json
+/composer.lock
+/.ddev/config.local.yaml
+.DS_Store
+/packages/*
+!/packages/.gitkeep

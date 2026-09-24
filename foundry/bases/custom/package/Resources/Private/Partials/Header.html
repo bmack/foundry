@@ -1,0 +1,8 @@
+<header class="sds-bar">
+    <f:link.page pageUid="{site.rootPageId}" class="sds-link sds-link--bare foundry-brand">{site.configuration.websiteTitle}</f:link.page>
+    <nav class="sds-bar__nav" aria-label="Main navigation">
+        <f:for each="{mainnavigation}" as="item">
+            <a class="sds-bar__link{f:if(condition: item.active, then: ' is-active')}" href="{item.link}" target="{item.target}"<f:if condition="{item.active}"> aria-current="page"</f:if>>{item.title}</a>
+        </f:for>
+    </nav>
+</header>

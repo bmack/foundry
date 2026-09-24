@@ -1,0 +1,5 @@
+{
+    "label": "Custom site package with a basic HTML page layout",
+    "extends": "fsc",
+    "setDependencies": ["typo3/fluid-styled-content"]
+}

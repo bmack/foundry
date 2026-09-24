@@ -1,0 +1,13 @@
+{
+    "label": "TYPO3 14",
+    "constraint": "^14.3",
+    "minimum-stability": "stable",
+    "packages": [
+        "backend", "belog", "beuser", "core", "dashboard", "extbase", "felogin", "filelist",
+        "filemetadata", "fluid", "fluid-styled-content", "form", "frontend", "impexp",
+        "indexed-search", "info", "install", "linkvalidator", "opendocs", "reactions", "recycler",
+        "redirects", "reports", "rte-ckeditor", "scheduler", "seo", "setup", "sys-note",
+        "tstemplate", "viewpage", "webhooks", "workspaces"
+    ],
+    "dev": ["adminpanel", "lowlevel", "styleguide"]
+}

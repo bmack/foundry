@@ -1,0 +1,12 @@
+<nav aria-label="Main navigation">
+    <ul>
+        <f:for each="{mainnavigation}" as="item">
+            <li>
+                <a href="{item.link}" target="{item.target}"<f:if condition="{item.active}"> aria-current="page"</f:if>>{item.title}</a>
+            </li>
+        </f:for>
+    </ul>
+</nav>
+<main id="main-content">
+    <f:render section="Main" />
+</main>

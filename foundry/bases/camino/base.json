@@ -1,0 +1,7 @@
+{
+    "label": "Camino theme",
+    "requires": {
+        "typo3/theme-camino": "typo3"
+    },
+    "setDependencies": ["typo3/theme-camino"]
+}

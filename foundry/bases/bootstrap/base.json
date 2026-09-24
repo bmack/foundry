@@ -1,0 +1,8 @@
+{
+    "label": "Bootstrap Package",
+    "versions": ["14"],
+    "requires": {
+        "bk2k/bootstrap-package": {"14": "^16.0"}
+    },
+    "setDependencies": ["bootstrap-package/full"]
+}

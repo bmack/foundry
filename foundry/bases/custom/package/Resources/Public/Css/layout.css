@@ -1,0 +1,9 @@
+/* Project layer on top of Soul: adjust the tokens and these rules, not soul.css. */
+.foundry-brand {
+    margin-inline-end: auto;
+    font-weight: 600;
+}
+
+.sds-body__main > * + * {
+    margin-block-start: 1.5rem;
+}

@@ -1,0 +1,9 @@
+{
+    "label": "Fluid Styled Content",
+    "seed": true,
+    "requires": {
+        "typo3/cms-fluid-styled-content": "typo3",
+        "typo3/cms-rte-ckeditor": "typo3"
+    },
+    "setDependencies": ["typo3/fluid-styled-content", "typo3/fluid-styled-content-css"]
+}
