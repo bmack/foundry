@@ -9,5 +9,5 @@
         "redirects", "reports", "rte-ckeditor", "scheduler", "seo", "setup", "sys-note",
         "tstemplate", "viewpage", "webhooks", "workspaces"
     ],
-    "dev": ["adminpanel", "lowlevel", "styleguide"]
+    "dev": ["adminpanel", "lowlevel"]
 }

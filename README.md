@@ -80,7 +80,7 @@ With `custom` and `fsc` you also get two sample pages, About and Contact, so the
 something to show on day one.
 
 Every system extension is installed as well, so nothing is missing later.
-(`adminpanel`, `lowlevel` and `styleguide` are development-only.)
+(`adminpanel` and `lowlevel` are development-only.)
 
 ## Where do I change things?
 
