@@ -112,6 +112,10 @@ setup() {
         error "This project has already been set up (the foundry/ directory is gone)."
         exit 1
     fi
+    if [ -f composer.json ] || [ -f foundry/.state.json ]; then
+        error "A previous run failed and left generated files behind. Run 'ddev delete -Oy' and clone foundry again."
+        exit 1
+    fi
 
     echo ""
     echo -e "${BOLD}TYPO3 foundry${NC}"
@@ -123,13 +127,17 @@ setup() {
     ask PROJECT "Project name (also the host name: https://<project>.ddev.site)" "$(slugify "$(basename "${DDEV_APPROOT}")")"
     ask VENDOR "Vendor name (lowercase, e.g. acme)" "${PROJECT}"
     choose VERSION "TYPO3 version" 1 "14:TYPO3 14 (^14.3, stable)" "15:TYPO3 15 (dev-main)"
-    choose BASE "Base for the site package" 1 \
-        "custom:Custom site package with a basic HTML page layout" \
-        "fsc:Fluid Styled Content" \
-        "camino:Camino theme" \
-        "bootstrap:Bootstrap Package" \
-        "empty:Empty site package" \
-        "none:No site package"
+    # The Bootstrap Package does not support TYPO3 15 yet, so do not offer it there.
+    local bases=(
+        "custom:Custom site package with a basic HTML page layout"
+        "fsc:Fluid Styled Content"
+        "camino:Camino theme"
+    )
+    if [ "${VERSION}" != "15" ]; then
+        bases+=("bootstrap:Bootstrap Package")
+    fi
+    bases+=("empty:Empty site package" "none:No site package")
+    choose BASE "Base for the site package" 1 "${bases[@]}"
 
     [[ "${VENDOR}" =~ ${NAME_PATTERN} ]]  || { error "Vendor must be lowercase letters, digits and dashes, starting with a letter"; exit 1; }
     [[ "${PROJECT}" =~ ${NAME_PATTERN} ]] || { error "Project must be lowercase letters, digits and dashes, starting with a letter"; exit 1; }
@@ -139,7 +147,7 @@ setup() {
         15) PHP_VERSION="8.5" ;;
         *)  error "Version must be 14 or 15"; exit 1 ;;
     esac
-    if [ ! -d "foundry/bases/${BASE}" ]; then
+    if [[ ! "${BASE}" =~ ${NAME_PATTERN} ]] || [ ! -d "foundry/bases/${BASE}" ]; then
         error "Unknown base: ${BASE}"
         exit 1
     fi
@@ -161,9 +169,13 @@ setup() {
     info "Installing Composer dependencies"
     ddev composer install
 
+    # The title is a plain "Word Word" string written by generate.php.
+    local TITLE
+    TITLE="$(sed -n 's/.*"title": *"\(.*\)".*/\1/p' foundry/.state.json)"
+
     info "Setting up TYPO3"
     ddev exec vendor/bin/typo3 setup --no-interaction --force --server-type=other \
-        --project-name="$(ddev exec php foundry/generate.php --print-title)" \
+        --project-name="${TITLE}" \
         --create-site="${PRIMARY_URL}/"
 
     ddev exec php foundry/generate.php --finalize --base-url="${PRIMARY_URL}/"

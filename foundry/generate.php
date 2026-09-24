@@ -87,6 +87,7 @@ function generate(string $root, array $options): void
         'name' => $vars['composerName'] . '-project',
         'description' => 'TYPO3 project ' . $title,
         'type' => 'project',
+        'license' => 'proprietary',
         'repositories' => [['type' => 'path', 'url' => 'packages/*']],
         'require' => $require,
         'require-dev' => $requireDev,
@@ -121,9 +122,9 @@ function generate(string $root, array $options): void
         writeFile($target . '/Configuration/Sets/Main/config.yaml', setConfig($vars, $base['setDependencies']));
     }
 
-    file_put_contents(
-        __DIR__ . '/.state.json',
-        json_encode(['title' => $title, 'package' => $base['package'], 'seed' => $base['seed'], 'set' => $vars['composerName']], JSON_PRETTY_PRINT)
+    writeFile(
+        statePath($root),
+        json_encode(['title' => $title, 'package' => $base['package'], 'seed' => $base['seed'], 'set' => $vars['composerName']], JSON_PRETTY_PRINT) . "\n"
     );
 
     echo sprintf("Generated %s (TYPO3 %s, base %s)\n", $vars['composerName'], $version, $baseName);
@@ -143,20 +144,21 @@ function finalize(string $root, string $baseUrl): void
     if ($configs === []) {
         fail('No site configuration found in config/sites/');
     }
+    $autoload = $root . '/vendor/autoload.php';
+    if (!is_file($autoload)) {
+        fail('Run composer install before --finalize');
+    }
+    require_once $autoload;
     foreach ($configs as $file) {
-        $yaml = (string)file_get_contents($file);
-        $dependencies = "dependencies:\n  - " . $state['set'] . "\n";
         // `typo3 setup` lists Fluid Styled Content; the site package's set replaces it.
-        $updated = preg_replace('/^dependencies:\n(?:[ \t]+- .*\n?)*/m', $dependencies, $yaml, 1, $count);
-        $yaml = $count === 1 ? (string)$updated : rtrim($yaml) . "\n" . $dependencies;
-        if (preg_match('/^websiteTitle:/m', $yaml) !== 1) {
-            $yaml = rtrim($yaml) . "\nwebsiteTitle: '" . str_replace("'", "''", $state['title']) . "'\n";
-        }
+        $config = \Symfony\Component\Yaml\Yaml::parseFile($file);
+        $config['dependencies'] = [$state['set']];
+        $config['websiteTitle'] ??= $state['title'];
         if ($baseUrl !== '') {
             // Camino imports its own site with a relative base
-            $yaml = (string)preg_replace('/^base:.*$/m', "base: '" . $baseUrl . "'", $yaml, 1);
+            $config['base'] = $baseUrl;
         }
-        writeFile($file, $yaml);
+        writeFile($file, \Symfony\Component\Yaml\Yaml::dump($config, 99, 2));
 
         // It also writes a bare PAGE with a TYPO3 logo next to config.yaml. Site
         // TypoScript is loaded after the sets, so it would replace the package's rendering.
@@ -183,8 +185,11 @@ function seedSql(array $state): string
     $title = $state['title'];
     $now = time();
 
-    $sql = sprintf(
-        "UPDATE tt_content SET header = %s, bodytext = %s WHERE pid = 1;\n",
+    // The root page and the admin are looked up, not assumed to have uid 1.
+    $sql = "SET @root := (SELECT uid FROM pages WHERE pid = 0 AND deleted = 0 ORDER BY sorting, uid LIMIT 1);\n";
+    $sql .= "SET @admin := COALESCE((SELECT uid FROM be_users WHERE admin = 1 AND deleted = 0 ORDER BY uid LIMIT 1), 1);\n";
+    $sql .= sprintf(
+        "UPDATE tt_content SET header = %s, bodytext = %s WHERE pid = @root;\n",
         $q('Welcome to ' . $title),
         $q('<p>This site was created with foundry. Edit the pages in the TYPO3 backend; the page layout lives in the site package under <code>Resources/Private/Pages/</code> (content element templates: <code>Resources/Private/Content/</code>).</p>')
     );
@@ -194,7 +199,7 @@ function seedSql(array $state): string
     ];
     foreach ($pages as [$name, $slug, $sorting, $header, $text]) {
         $sql .= sprintf(
-            "INSERT INTO pages (pid, sorting, title, slug, doktype, crdate, tstamp, perms_userid, perms_user, perms_group) VALUES (1, %d, %s, %s, 1, %d, %d, 1, 31, 27);\n",
+            "INSERT INTO pages (pid, sorting, title, slug, doktype, crdate, tstamp, perms_userid, perms_user, perms_group) VALUES (@root, %d, %s, %s, 1, %d, %d, @admin, 31, 27);\n",
             $sorting, $q($name), $q($slug), $now, $now
         );
         $sql .= sprintf(
@@ -304,9 +309,14 @@ function render(string $template, array $vars): string
     }, $template);
 }
 
+function statePath(string $root): string
+{
+    return $root . '/foundry/.state.json';
+}
+
 function readState(string $root): array
 {
-    $file = __DIR__ . '/.state.json';
+    $file = statePath($root);
     if (!is_file($file)) {
         fail('Nothing generated yet; run generate.php with --vendor, --project, --version and --base first');
     }
